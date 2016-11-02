@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bookmarky</title>
+    <meta charset="utf-8">
+</head>
+<body>
+<h1>Welcome to Bookmarky</h1>
+{% if user != null %}
+<p>Welcome back, {{ user.name }}!</p>
+    <p><a href="/logout">Log Out</a></p>
+{% else %}
+    <h2>Log In</h2>
+    <form action="/login" method="POST">
+        <label>Username: <input name="username" type="text" width="50"></label><br>
+        <label>Password: <input name="password" type="password" width="50"></label><br>
+        <button type="submit">Log In!</button>
+    </form>
+    <h2>Create Account</h2>
+    <form action="/createUser" method="POST">
+        <label>Username: <input name="username" type="text" width="50"></label><br>
+        <label>Password: <input name="password" type="password" width="50"></label><br>
+        <label>Confirm Password: <input name="confirm" type="password" width="50"></label><br>
+        <button type="submit">Create Account</button>
+    </form>
+{% endif %}
+</body>
+</html>

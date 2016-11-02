@@ -1,0 +1,21 @@
+CREATE TABLE bm_user (
+  user_id SERIAL PRIMARY KEY,
+  username VARCHAR(32) NOT NULL UNIQUE,
+  pw_hash VARCHAR(100) NOT NULL,
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE bookmark (
+  bm_id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES bm_user (user_id),
+  url VARCHAR NOT NULL,
+  title VARCHAR,
+  description TEXT,
+  created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE bm_tag (
+  bm_id INTEGER NOT NULL REFERENCES bookmark,
+  tag VARCHAR NOT NULL,
+  PRIMARY KEY (bm_id, tag)
+);
