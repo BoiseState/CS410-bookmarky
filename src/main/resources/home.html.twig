@@ -9,6 +9,15 @@
 {% if user != null %}
 <p>Welcome back, {{ user.name }}!</p>
     <p><a href="/logout">Log Out</a></p>
+    <h2>Create a Bookmark</h2>
+    <form action="/bookmark" method="POST">
+        <label>Title: <input type="text" name="title" width="100"></label><br>
+        <label>URL: <input type="text" name="url" width="100"></label><br>
+        <label for="new-desc">Description:</label><br>
+        <textarea rows="10" cols="50" name="description" id="new-desc"></textarea><br>
+        <label>Tags: <input type="text" name="tags" width="100" placeholder="space-separated tags"></label><br>
+        <button type="submit">Add Bookmark</button>
+    </form>
 {% else %}
     <h2>Log In</h2>
     <form action="/login" method="POST">

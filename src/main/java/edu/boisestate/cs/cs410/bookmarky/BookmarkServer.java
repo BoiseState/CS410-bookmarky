@@ -34,6 +34,7 @@ public class BookmarkServer {
         http.get("/logout", this::logout);
         http.post("/login", this::login);
         http.post("/createUser", this::createUser);
+        http.post("/bookmark", this::addBookmark);
     }
 
     public String redirectToFolder(Request request, Response response) {
@@ -156,5 +157,74 @@ public class BookmarkServer {
 
         response.redirect("/", 303);
         return "See you later!";
+    }
+
+    private Object addBookmark(Request request, Response response) throws SQLException {
+        Long uid = request.session().attribute("userId");
+        if (uid == null) {
+            http.halt(403, "user not logged in");
+        }
+
+        // Require a URL, or the request is no good
+        String url = request.queryParams("url");
+        if (url == null || url.isEmpty()) {
+            http.halt(400, "no URL");
+        }
+        // Request a title
+        String title = request.queryParams("title");
+        if (title == null || title.isEmpty()) {
+            title = url;
+        }
+        // Description is optional. Normalize so empty is null.
+        String description = request.queryParams("description");
+        if (description != null && description.trim().isEmpty()) {
+            description = null;
+        }
+        // Grab tags and split them apart
+        String tagString = request.queryParams("tags");
+        List<String> tags = new ArrayList<>();
+        if (tagString != null && !tagString.trim().isEmpty()) {
+            String[] split = tagString.split("\\s+");
+            for (String t: split) {
+                String trimmed = t.trim();
+                if (!trimmed.isEmpty()) {
+                    tags.add(trimmed.toLowerCase());
+                }
+            }
+        }
+
+        try (Connection cxn = pool.getConnection()) {
+            // put in the URL
+            long bm_id;
+            cxn.setAutoCommit(false);
+            try {
+                try (PreparedStatement bm = cxn.prepareStatement("INSERT INTO bookmark (user_id, title, url, description) VALUES (?, ?, ?, ?) RETURNING bm_id")) {
+                    bm.setLong(1, uid);
+                    bm.setString(2, title);
+                    bm.setString(3, url);
+                    bm.setString(4, description);
+                    bm.execute();
+                    try (ResultSet rs = bm.getResultSet()) {
+                        rs.next();
+                        bm_id = rs.getLong(1);
+                    }
+                }
+                // Add the tags
+                try (PreparedStatement ts = cxn.prepareStatement("INSERT INTO bm_tag (bm_id, tag) VALUES (?, ?)")) {
+                    ts.setLong(1, bm_id);
+                    for (String tag : tags) {
+                        ts.setString(2, tag);
+                        ts.execute();
+                    }
+                }
+                cxn.commit();
+            } finally {
+                cxn.rollback();
+                cxn.setAutoCommit(true);
+            }
+        }
+
+        response.redirect("/", 303);
+        return "Added bookmark";
     }
 }
