@@ -14,8 +14,24 @@ CREATE TABLE bookmark (
   created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE tag (
+  tag_id SERIAL PRIMARY KEY,
+  tag VARCHAR(100) NOT NULL UNIQUE
+);
+
 CREATE TABLE bm_tag (
   bm_id INTEGER NOT NULL REFERENCES bookmark,
-  tag VARCHAR NOT NULL,
-  PRIMARY KEY (bm_id, tag)
+  tag_id INTEGER NOT NULL REFERENCES tag,
+  PRIMARY KEY (bm_id, tag_id)
 );
+
+-- grab the tags
+-- INSERT INTO tag (tag)
+-- SELECT DISTINCT tag FROM bm_tag;
+
+-- rename BM TAG out of the way
+-- ALTER TABLE bm_tag RENAME TO old_bm_tag;
+-- run create table here
+-- INSERT INTO bm_tag (bm_id, tag_id)
+-- SELECT bm_id, tag_id FROM old_bm_tag JOIN tag USING (tag);
+-- DROP TABLE old_bm_tag;

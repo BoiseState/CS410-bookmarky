@@ -50,7 +50,6 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>9.4.1211.jre7</version>
-      <scope>runtime</scope>
     </dependency>
   </dependencies>
 

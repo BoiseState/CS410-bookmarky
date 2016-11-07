@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMap;
 import com.mitchellbosecke.pebble.loader.ClasspathLoader;
 import org.apache.commons.dbcp2.PoolingDataSource;
 import org.mindrot.jbcrypt.BCrypt;
+import org.postgresql.util.PSQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import spark.*;
@@ -195,31 +196,64 @@ public class BookmarkServer {
 
         try (Connection cxn = pool.getConnection()) {
             // put in the URL
+            boolean succeeded = false;
             long bm_id;
+            cxn.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
             cxn.setAutoCommit(false);
             try {
-                try (PreparedStatement bm = cxn.prepareStatement("INSERT INTO bookmark (user_id, title, url, description) VALUES (?, ?, ?, ?) RETURNING bm_id")) {
-                    bm.setLong(1, uid);
-                    bm.setString(2, title);
-                    bm.setString(3, url);
-                    bm.setString(4, description);
-                    bm.execute();
-                    try (ResultSet rs = bm.getResultSet()) {
-                        rs.next();
-                        bm_id = rs.getLong(1);
+                while (!succeeded) {
+                    try {
+                        try (PreparedStatement bm = cxn.prepareStatement("INSERT INTO bookmark (user_id, title, url, description) VALUES (?, ?, ?, ?) RETURNING bm_id")) {
+                            bm.setLong(1, uid);
+                            bm.setString(2, title);
+                            bm.setString(3, url);
+                            bm.setString(4, description);
+                            bm.execute();
+                            try (ResultSet rs = bm.getResultSet()) {
+                                rs.next();
+                                bm_id = rs.getLong(1);
+                            }
+                        }
+                        // Add the tags
+                        try (PreparedStatement lookupTag =
+                                     cxn.prepareStatement("SELECT tag_id FROM tag WHERE tag = ?");
+                             PreparedStatement addTag =
+                                     cxn.prepareStatement("INSERT INTO tag (tag) VALUES (?) RETURNING tag_id");
+                             PreparedStatement bmTag =
+                                     cxn.prepareStatement("INSERT INTO bm_tag (bm_id, tag_id) VALUES (?, ?)")) {
+                            bmTag.setLong(1, bm_id);
+                            for (String tag : tags) {
+                                long tagId = 0;
+                                boolean foundTag = false;
+                                lookupTag.setString(1, tag);
+                                try (ResultSet rs = lookupTag.executeQuery()) {
+                                    if (rs.next()) {
+                                        foundTag = true;
+                                        tagId = rs.getLong(1);
+                                    }
+                                }
+                                if (!foundTag) {
+                                    addTag.setString(1, tag);
+                                    addTag.execute();
+                                    try (ResultSet rs = addTag.getResultSet()) {
+                                        rs.next();
+                                        tagId = rs.getLong(1);
+                                    }
+                                }
+
+                                bmTag.setLong(2, tagId);
+                                bmTag.execute();
+                            }
+                        }
+                        cxn.commit();
+                        logger.info("successfully added tag");
+                        succeeded = true;
+                    } catch (PSQLException th) {
+                        logger.info("received constraint error, trying again", th);
+                        cxn.rollback();
                     }
                 }
-                // Add the tags
-                try (PreparedStatement ts = cxn.prepareStatement("INSERT INTO bm_tag (bm_id, tag) VALUES (?, ?)")) {
-                    ts.setLong(1, bm_id);
-                    for (String tag : tags) {
-                        ts.setString(2, tag);
-                        ts.execute();
-                    }
-                }
-                cxn.commit();
             } finally {
-                cxn.rollback();
                 cxn.setAutoCommit(true);
             }
         }
