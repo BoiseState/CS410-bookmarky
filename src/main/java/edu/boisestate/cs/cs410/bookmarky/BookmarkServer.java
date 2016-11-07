@@ -10,11 +10,9 @@ import org.slf4j.LoggerFactory;
 import spark.*;
 import spark.template.pebble.PebbleTemplateEngine;
 
+import java.security.SecureRandom;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Server for the charity database.
@@ -72,6 +70,17 @@ public class BookmarkServer {
     ModelAndView rootPage(Request request, Response response) throws SQLException {
         Map<String,Object> fields = new HashMap<>();
         fields.put("user", getUser(request));
+
+        // initialize CSRF token
+        String token = request.session().attribute("csrf_token");
+        if (token == null) {
+            SecureRandom rng = new SecureRandom();
+            byte[] bytes = new byte[8];
+            rng.nextBytes(bytes);
+            token = Base64.getEncoder().encodeToString(bytes);
+            request.session(true).attribute("csrf_token", token);
+        }
+        fields.put("csrf_token", token);
 
         return new ModelAndView(fields, "home.html.twig");
     }
@@ -164,6 +173,12 @@ public class BookmarkServer {
         Long uid = request.session().attribute("userId");
         if (uid == null) {
             http.halt(403, "user not logged in");
+        }
+
+        String token = request.session().attribute("csrf_token");
+        String submittedToken = request.queryParams("csrf_token");
+        if (token == null || !token.equals(submittedToken)) {
+            http.halt(400, "invalid CSRF token");
         }
 
         // Require a URL, or the request is no good

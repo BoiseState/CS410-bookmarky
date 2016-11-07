@@ -11,6 +11,7 @@
     <p><a href="/logout">Log Out</a></p>
     <h2>Create a Bookmark</h2>
     <form action="/bookmark" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label>Title: <input type="text" name="title" width="100"></label><br>
         <label>URL: <input type="text" name="url" width="100"></label><br>
         <label for="new-desc">Description:</label><br>
