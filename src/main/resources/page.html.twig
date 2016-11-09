@@ -7,7 +7,7 @@
 <body>
 <h1>Welcome to Bookmarky</h1>
 {% if user != null %}
-<p>Welcome back, {{ user.name }}!  You have {{ bookmark_count }} bookmarks.</p>
+<p>Welcome back, {{ user.name }}!</p>
     <p><a href="/logout">Log Out</a></p>
     <h2>Create a Bookmark</h2>
     <form action="/bookmark" method="POST">
@@ -19,16 +19,6 @@
         <label>Tags: <input type="text" name="tags" width="100" placeholder="space-separated tags"></label><br>
         <button type="submit">Add Bookmark</button>
     </form>
-    <h2>Bookmarks</h2>
-    {% for bm in bookmarks %}
-<div>
-    <h3><a href="{{ bm.url }}">{{ bm.title }}</a></h3>
-    {% if bm.description != null %}
-    <p>{{ bm.description }}</p>
-    {% endif %}
-    <div>{{ bm.tags }}</div>
-</div>
-{% endfor %}
 {% else %}
     <h2>Log In</h2>
     <form action="/login" method="POST">

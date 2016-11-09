@@ -20,10 +20,18 @@ import java.util.*;
  */
 public class BookmarkServer {
     private static final Logger logger = LoggerFactory.getLogger(BookmarkServer.class);
+    private final static String BOOKMARK_QUERY =
+            "SELECT bm_id, title, url, description, STRING_AGG(tag, ' ') AS tags\n" +
+                    "FROM bookmark LEFT OUTER JOIN bm_tag USING (bm_id) LEFT OUTER JOIN tag USING (tag_id)\n" +
+                    "WHERE user_id = ?\n" +
+                    "GROUP BY bm_id, title, url, description\n" +
+                    "ORDER BY created DESC\n" +
+                    "LIMIT 25 OFFSET ?";
 
     private final PoolingDataSource<? extends Connection> pool;
     private final Service http;
     private final TemplateEngine engine;
+
 
     public BookmarkServer(PoolingDataSource<? extends Connection> pds, Service svc) {
         pool = pds;
@@ -43,7 +51,7 @@ public class BookmarkServer {
         return "Redirecting to " + path + "/";
     }
 
-    private Map<String,Object> getUser(Request request) throws SQLException {
+    private User getUser(Request request) throws SQLException {
         Long uid = request.session().attribute("userId");
         if (uid == null) {
             return null;
@@ -54,10 +62,7 @@ public class BookmarkServer {
             stmt.setLong(1, uid);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    Map<String,Object> user = new HashMap<>();
-                    user.put("id", uid);
-                    user.put("name", rs.getString("username"));
-                    return user;
+                    return new User(uid, rs.getString("username"));
                 } else {
                     return null;
                 }
@@ -70,7 +75,26 @@ public class BookmarkServer {
      */
     ModelAndView rootPage(Request request, Response response) throws SQLException {
         Map<String,Object> fields = new HashMap<>();
-        fields.put("user", getUser(request));
+        User user = getUser(request);
+        fields.put("user", user);
+        if (user != null) {
+            try (Connection cxn = pool.getConnection()) {
+                try (PreparedStatement ps = cxn.prepareStatement("SELECT COUNT(bm_id) FROM bookmark WHERE user_id = ?")) {
+                    ps.setLong(1, user.getId());
+                    try (ResultSet rs = ps.executeQuery()) {
+                        rs.next();
+                        fields.put("bookmark_count", rs.getInt(1));
+                    }
+                }
+                try (PreparedStatement ps = cxn.prepareStatement(BOOKMARK_QUERY)) {
+                    ps.setLong(1, user.getId());
+                    ps.setInt(2, 0);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        fields.put("bookmarks", getBookmarks(rs));
+                    }
+                }
+            }
+        }
 
         // initialize CSRF token
         String token = request.session().attribute("csrf_token");
@@ -84,6 +108,20 @@ public class BookmarkServer {
         fields.put("csrf_token", token);
 
         return new ModelAndView(fields, "home.html.twig");
+    }
+
+    private List<Map<String, Object>> getBookmarks(ResultSet rs) throws SQLException {
+        List<Map<String,Object>> obj = new ArrayList<>();
+        while (rs.next()) {
+            Map<String,Object> m = new HashMap<>();
+            m.put("id", rs.getLong("bm_id"));
+            m.put("title", rs.getString("title"));
+            m.put("description", rs.getString("description"));
+            m.put("url", rs.getString("url"));
+            m.put("tags", rs.getString("tags"));
+            obj.add(m);
+        }
+        return obj;
     }
 
     String logout(Request request, Response response) {
