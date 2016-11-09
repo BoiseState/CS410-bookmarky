@@ -1,17 +1,18 @@
 package edu.boisestate.cs.cs410.bookmarky;
 
-import com.google.common.collect.ImmutableMap;
 import com.mitchellbosecke.pebble.loader.ClasspathLoader;
 import org.apache.commons.dbcp2.PoolingDataSource;
 import org.mindrot.jbcrypt.BCrypt;
-import org.postgresql.util.PSQLException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import spark.*;
 import spark.template.pebble.PebbleTemplateEngine;
 
 import java.security.SecureRandom;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 
 /**
@@ -216,7 +217,8 @@ public class BookmarkServer {
             cxn.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
             cxn.setAutoCommit(false);
             try {
-                while (!succeeded) {
+                int retryCount = 5;
+                while (retryCount > 0) {
                     try {
                         try (PreparedStatement bm = cxn.prepareStatement("INSERT INTO bookmark (user_id, title, url, description) VALUES (?, ?, ?, ?) RETURNING bm_id")) {
                             bm.setLong(1, uid);
@@ -261,11 +263,21 @@ public class BookmarkServer {
                             }
                         }
                         cxn.commit();
-                        logger.info("successfully added tag");
                         succeeded = true;
-                    } catch (PSQLException th) {
-                        logger.info("received constraint error, trying again", th);
-                        cxn.rollback();
+                        retryCount = 0;
+                        logger.info("successfully added tag");
+                    } catch (SQLException ex) {
+                        if (ex.getErrorCode() / 1000 == 23) {
+                            logger.info("integrity error adding to database, retrying", ex);
+                            retryCount--;
+                        } else {
+                            logger.info("other error encountered adding to database, aborting", ex);
+                            throw ex;
+                        }
+                    } finally {
+                        if (!succeeded) {
+                            cxn.rollback();
+                        }
                     }
                 }
             } finally {
